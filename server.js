@@ -14,13 +14,42 @@ const { testConnection } = require("./config/supabase");
 // Middleware
 app.use(helmet());
 app.use(morgan("combined"));
+
+// CORS configuration - allow multiple origins
+const allowedOrigins = [
+  process.env.FRONTEND_URL || "http://localhost:5173",
+  process.env.FRONTEND_URL_ALT || "http://localhost:5174",
+  "http://localhost:5173",
+  "http://localhost:5174",
+  "https://go-save-backend-six.vercel.app",
+];
+
+// Add production frontend URL if it exists
+if (process.env.FRONTEND_URL_PRODUCTION) {
+  allowedOrigins.push(process.env.FRONTEND_URL_PRODUCTION);
+}
+
 app.use(
   cors({
-    origin: [
-      process.env.FRONTEND_URL || "http://localhost:5173",
-      process.env.FRONTEND_URL_ALT || "http://localhost:5174",
-    ],
+    origin: function (origin, callback) {
+      // Allow requests with no origin (mobile apps, Postman, etc.)
+      if (!origin) return callback(null, true);
+      
+      // Check if origin is in allowed list
+      if (allowedOrigins.indexOf(origin) !== -1) {
+        callback(null, true);
+      } else {
+        // In production, be more flexible with vercel.app domains
+        if (origin && origin.includes('.vercel.app')) {
+          callback(null, true);
+        } else {
+          callback(new Error('Not allowed by CORS'));
+        }
+      }
+    },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
 app.use(express.json());
@@ -77,7 +106,7 @@ app.use((err, req, res, next) => {
 });
 
 // Start server (only when not in Vercel serverless environment)
-if (process.env.NODE_ENV !== 'production') {
+if (process.env.NODE_ENV !== "production") {
   app.listen(PORT, async () => {
     console.log(`🚀 GoSave API server is running on port ${PORT}`);
     console.log(`📍 Environment: ${process.env.NODE_ENV || "development"}`);
